@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: ai-shorts-generator
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
