@@ -110,9 +110,7 @@ def media(relpath):
 
 @app.route("/")
 def index():
-    return send_from_directory(
-        os.path.join(os.path.dirname(__file__), "..", "frontend"), "index.html"
-    )
+    return send_from_directory(os.path.dirname(__file__), "index.html")
 
 
 if __name__ == "__main__":
