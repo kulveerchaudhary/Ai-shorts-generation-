@@ -313,14 +313,34 @@ def generate_metadata(moment: Moment) -> Moment:
 # STEP 5: Face-aware smart crop to 9:16
 # ---------------------------------------------------------------------------
 
-_face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+_face_cascade = None
+_face_cascade_failed = False
+
+
+def _get_face_cascade():
+    global _face_cascade, _face_cascade_failed
+    if _face_cascade is not None or _face_cascade_failed:
+        return _face_cascade
+    try:
+        _face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+        if _face_cascade.empty():
+            _face_cascade = None
+            _face_cascade_failed = True
+    except Exception:
+        _face_cascade = None
+        _face_cascade_failed = True
+    return _face_cascade
 
 
 def find_focal_x(video_path: str, start: float, end: float, sample_n: int = 6) -> float:
     """Sample a few frames in [start,end], run face detection, and return the
     average horizontal face-center as a fraction of frame width (0..1).
-    Falls back to center (0.5) if no face is found — real face tracking that
-    degrades gracefully instead of crashing."""
+    Falls back to center (0.5) if no face is found, or if face detection
+    isn't available in this environment — degrades gracefully instead of
+    crashing."""
+    cascade = _get_face_cascade()
+    if cascade is None:
+        return 0.5
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 25
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -332,7 +352,7 @@ def find_focal_x(video_path: str, start: float, end: float, sample_n: int = 6) -
         if not ok:
             continue
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        faces = _face_cascade.detectMultiScale(gray, 1.1, 5, minSize=(40, 40))
+        faces = cascade.detectMultiScale(gray, 1.1, 5, minSize=(40, 40))
         if len(faces):
             biggest = max(faces, key=lambda f: f[2] * f[3])
             fx = biggest[0] + biggest[2] / 2
