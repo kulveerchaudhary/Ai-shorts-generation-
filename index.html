@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Shorts Generator</title>
+<style>
+  :root{
+    --bg:#0b0b12; --panel:#15151f; --border:#26263a; --text:#f2f2f7;
+    --muted:#9797ab; --accent:#7c5cff; --accent2:#ff5c9d; --good:#3ddc97;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    background:radial-gradient(circle at 20% -10%, #221a3d, var(--bg) 60%);
+    color:var(--text); min-height:100vh;
+  }
+  header{padding:28px 20px 10px; text-align:center;}
+  header h1{
+    margin:0; font-size:26px; font-weight:800;
+    background:linear-gradient(90deg,var(--accent),var(--accent2));
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  header p{color:var(--muted); margin:6px 0 0; font-size:14px;}
+  .wrap{max-width:900px; margin:0 auto; padding:20px;}
+
+  .card{
+    background:var(--panel); border:1px solid var(--border); border-radius:16px;
+    padding:22px; margin-bottom:18px;
+  }
+
+  #dropzone{
+    border:2px dashed var(--border); border-radius:14px; padding:36px 16px;
+    text-align:center; cursor:pointer; transition:.2s;
+  }
+  #dropzone.drag{border-color:var(--accent); background:#1c1830;}
+  #dropzone p{margin:6px 0; color:var(--muted); font-size:13px;}
+  #dropzone strong{color:var(--text); font-size:15px;}
+  input[type=file]{display:none;}
+
+  .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:14px;}
+  label.small{font-size:13px; color:var(--muted);}
+  select, input[type=number]{
+    background:#0e0e17; border:1px solid var(--border); color:var(--text);
+    padding:8px 10px; border-radius:8px; font-size:13px;
+  }
+
+  button.primary{
+    background:linear-gradient(90deg,var(--accent),var(--accent2)); border:none;
+    color:white; font-weight:700; padding:12px 22px; border-radius:10px;
+    cursor:pointer; font-size:14px; margin-top:16px;
+  }
+  button.primary:disabled{opacity:.4; cursor:not-allowed;}
+
+  #progressWrap{display:none; margin-top:18px;}
+  .bar{height:8px; border-radius:6px; background:#0e0e17; overflow:hidden; border:1px solid var(--border);}
+  .bar > div{height:100%; width:0%; background:linear-gradient(90deg,var(--accent),var(--accent2)); transition:width .3s;}
+  #progressMsg{font-size:13px; color:var(--muted); margin-top:8px;}
+
+  #grid{
+    display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr));
+    gap:16px; margin-top:6px;
+  }
+  .clipcard{
+    background:#0e0e17; border:1px solid var(--border); border-radius:14px;
+    overflow:hidden; display:flex; flex-direction:column;
+  }
+  .clipcard video{width:100%; aspect-ratio:9/16; background:#000; display:block;}
+  .clipbody{padding:12px;}
+  .score{
+    display:inline-block; font-weight:800; font-size:13px; padding:3px 9px;
+    border-radius:20px; background:rgba(61,220,151,.15); color:var(--good);
+    margin-bottom:8px;
+  }
+  .score.mid{background:rgba(255,196,0,.15); color:#ffc400;}
+  .title{font-size:14px; font-weight:700; margin:4px 0 2px;}
+  .reason{font-size:12px; color:var(--muted); margin:0 0 10px; line-height:1.4;}
+  .hashtags{font-size:11px; color:var(--accent); margin-bottom:10px;}
+  .btnrow{display:flex; gap:8px;}
+  .btnrow a, .btnrow button{
+    flex:1; text-align:center; font-size:12px; padding:8px; border-radius:8px;
+    border:1px solid var(--border); background:#15151f; color:var(--text);
+    text-decoration:none; cursor:pointer;
+  }
+  .btnrow a.download{background:var(--accent); border-color:var(--accent); font-weight:700;}
+  #empty{color:var(--muted); font-size:13px; text-align:center; padding:20px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>⚡ AI Shorts Generator</h1>
+  <p>Upload a long video → AI finds the best moments → get ready-to-post Shorts</p>
+</header>
+
+<div class="wrap">
+
+  <div class="card">
+    <div id="dropzone">
+      <strong>Click to upload, or drag a video here</strong>
+      <p>MP4, MOV, MKV, WEBM · up to 2GB</p>
+      <input type="file" id="fileInput" accept=".mp4,.mov,.mkv,.webm,.avi">
+    </div>
+
+    <div class="row">
+      <label class="small">Number of clips to generate:</label>
+      <select id="targetClips">
+        <option value="3">3</option>
+        <option value="5" selected>5</option>
+        <option value="8">8</option>
+        <option value="10">10</option>
+      </select>
+    </div>
+
+    <button class="primary" id="generateBtn" disabled>Generate Shorts</button>
+
+    <div id="progressWrap">
+      <div class="bar"><div id="progressFill"></div></div>
+      <div id="progressMsg">Starting…</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">Results</h3>
+    <div id="grid"></div>
+    <div id="empty">No shorts generated yet — upload a video to get started.</div>
+  </div>
+
+</div>
+
+<script>
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const generateBtn = document.getElementById('generateBtn');
+const progressWrap = document.getElementById('progressWrap');
+const progressFill = document.getElementById('progressFill');
+const progressMsg = document.getElementById('progressMsg');
+const grid = document.getElementById('grid');
+const empty = document.getElementById('empty');
+
+let selectedFile = null;
+let jobId = null;
+
+dropzone.addEventListener('click', () => fileInput.click());
+['dragenter','dragover'].forEach(evt =>
+  dropzone.addEventListener(evt, e => { e.preventDefault(); dropzone.classList.add('drag'); }));
+['dragleave','drop'].forEach(evt =>
+  dropzone.addEventListener(evt, e => { e.preventDefault(); dropzone.classList.remove('drag'); }));
+dropzone.addEventListener('drop', e => {
+  if (e.dataTransfer.files.length) setFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', e => {
+  if (e.target.files.length) setFile(e.target.files[0]);
+});
+
+function setFile(f){
+  selectedFile = f;
+  dropzone.querySelector('strong').textContent = `Selected: ${f.name}`;
+  generateBtn.disabled = false;
+}
+
+generateBtn.addEventListener('click', async () => {
+  if (!selectedFile) return;
+  generateBtn.disabled = true;
+  progressWrap.style.display = 'block';
+  progressFill.style.width = '2%';
+  progressMsg.textContent = 'Uploading…';
+  grid.innerHTML = '';
+  empty.style.display = 'none';
+
+  const form = new FormData();
+  form.append('video', selectedFile);
+
+  try {
+    const uploadRes = await fetch('/api/upload', { method: 'POST', body: form });
+    const uploadData = await uploadRes.json();
+    if (uploadData.error) throw new Error(uploadData.error);
+    jobId = uploadData.job_id;
+
+    const targetClips = document.getElementById('targetClips').value;
+    await fetch(`/api/process/${jobId}`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({target_clips: parseInt(targetClips)})
+    });
+
+    poll();
+  } catch (err) {
+    progressMsg.textContent = 'Error: ' + err.message;
+    generateBtn.disabled = false;
+  }
+});
+
+async function poll(){
+  const res = await fetch(`/api/status/${jobId}`);
+  const data = await res.json();
+  progressFill.style.width = data.progress + '%';
+  progressMsg.textContent = data.message || '';
+
+  if (data.error) {
+    progressMsg.textContent = 'Error: ' + data.error;
+    generateBtn.disabled = false;
+    return;
+  }
+  if (!data.done) {
+    setTimeout(poll, 1200);
+    return;
+  }
+  const resultsRes = await fetch(`/api/results/${jobId}`);
+  const manifest = await resultsRes.json();
+  renderResults(manifest);
+  generateBtn.disabled = false;
+}
+
+function renderResults(manifest){
+  grid.innerHTML = '';
+  if (!manifest.moments || manifest.moments.length === 0){
+    empty.style.display = 'block';
+    empty.textContent = 'No strong moments found in this video.';
+    return;
+  }
+  manifest.moments.forEach(m => {
+    const el = document.createElement('div');
+    el.className = 'clipcard';
+    const scoreClass = m.score >= 80 ? '' : 'mid';
+    el.innerHTML = `
+      <video controls preload="metadata" poster="/media/${m.thumbnail_path}">
+        <source src="/media/${m.clip_path}" type="video/mp4">
+      </video>
+      <div class="clipbody">
+        <span class="score ${scoreClass}">Viral Potential: ${m.score}/100</span>
+        <div class="title">${m.title || m.category}</div>
+        <p class="reason">"${m.hook}" — ${m.reason}</p>
+        <div class="hashtags">${(m.hashtags||[]).join(' ')}</div>
+        <div class="btnrow">
+          <a class="download" href="/media/${m.clip_path}" download>Download</a>
+          <button onclick="alert('Regenerate is a stub — plug in the analyzer to re-score this moment.')">Regenerate</button>
+        </div>
+      </div>`;
+    grid.appendChild(el);
+  });
+}
+</script>
+</body>
+</html>
